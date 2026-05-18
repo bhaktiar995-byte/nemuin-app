@@ -136,11 +136,22 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
       const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
       const filePath = `uploads/${fileName}`;
 
-      const { data, error } = await supabase.storage
+      // Ensure use of VITE_ prefix if available, but supabase client handles it.
+      const { error } = await supabase.storage
         .from(bucket)
-        .upload(filePath, file);
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase storage upload error:', error);
+        // If bucket doesn't exist, this is a common failure.
+        if (error.message.includes('bucket not found') || error.message.includes('Bucket not found')) {
+          alert("Error: Bucket 'images' belum dibuat di Supabase Storage. Silahkan buat bucket publik bernama 'images' di dashboard Supabase.");
+        }
+        return null;
+      }
 
       const { data: { publicUrl } } = supabase.storage
         .from(bucket)
@@ -148,19 +159,30 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
 
       return publicUrl;
     } catch (err) {
-      console.error('Error uploading image:', err);
+      console.error('Unexpected error during upload:', err);
       return null;
     }
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setLoading(true);
+    const form = e.target as HTMLFormElement;
+
+    // Check if Supabase is configured
+    if (!supabase.storage.from('test').getPublicUrl('test').data.publicUrl.includes('supabase.co')) {
+       // This is a naive check but helps identify missing credentials
+       if (!(import.meta as any).env.VITE_SUPABASE_URL) {
+         alert("Konfigurasi Supabase belum lengkap. Silahkan isi VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di environment variables.");
+         setLoading(false);
+         return;
+       }
+    }
+
     if (type !== 'resto') {
-      // Logic for adding a post directly to Supabase
-      setLoading(true);
       try {
-        const form = e.target as HTMLFormElement;
-        const content = (form.elements.namedItem('content') as HTMLTextAreaElement).value;
+        const contentInput = form.elements.namedItem('content') as HTMLTextAreaElement;
+        const content = contentInput ? contentInput.value : '';
         
         let uploadedPublicUrl = null;
         if (restoFile) {
@@ -171,7 +193,7 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
           .from('posts')
           .insert([{
             content,
-            image: uploadedPublicUrl,
+            image: uploadedPublicUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
             author: 'Anonymous',
             date: new Date().toISOString()
           }]);
@@ -180,15 +202,13 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
         onSuccess();
       } catch (err: any) {
         console.error("Post save failed:", err);
-        alert(`Gagal posting: ${err.message || 'Terjadi kesalahan'}`);
+        alert(`Gagal posting: ${err.message || 'Terjadi kesalahan'}\n\nPastikan tabel 'posts' sudah ada di Supabase.`);
       } finally {
         setLoading(false);
       }
       return;
     }
 
-    setLoading(true);
-    const form = e.target as HTMLFormElement;
     const name = (form.elements.namedItem('nama_tempat') as HTMLInputElement).value;
     const address = (form.elements.namedItem('alamat') as HTMLInputElement).value;
     const priceRange = (form.elements.namedItem('rentang_harga') as HTMLInputElement).value;
@@ -197,14 +217,14 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
     
     try {
       // 1. Upload Restaurant Image
-      let restoPublicUrl = restoImage || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=400";
+      let restoPublicUrl = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=400";
       if (restoFile) {
         const uploaded = await uploadImage(restoFile);
         if (uploaded) restoPublicUrl = uploaded;
       }
 
       // 2. Insert Restaurant
-      const { data: resto, error: restoError } = await supabase
+      const { data: restoData, error: restoError } = await supabase
         .from('restaurants')
         .insert([{
           name,
@@ -220,16 +240,18 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
           rating: 0,
           review_count: 0
         }])
-        .select()
-        .single();
+        .select();
 
       if (restoError) throw restoError;
+      
+      const resto = restoData?.[0];
+      if (!resto) throw new Error("Gagal mendapatkan data restauran setelah insert.");
 
       // 3. Insert Menu Items
       const validMenuItems = menuItems.filter(item => item.name.trim() !== '');
       if (validMenuItems.length > 0) {
         const menuItemsToInsert = await Promise.all(validMenuItems.map(async (item) => {
-          let itemPublicUrl = item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200";
+          let itemPublicUrl = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200";
           if (item.file) {
             const uploaded = await uploadImage(item.file);
             if (uploaded) itemPublicUrl = uploaded;
@@ -249,14 +271,13 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
 
         if (menuError) {
           console.error("Menu items insert failed:", menuError);
-          // We don't fail the whole request but alert the user
         }
       }
 
       onSuccess();
     } catch (err: any) {
       console.error("Supabase Save failed:", err);
-      alert(`Gagal menyimpan: ${err.message || 'Terjadi kesalahan'}\n\nPastikan tabel dan bucket 'images' sudah disiapkan di Supabase.`);
+      alert(`Gagal menyimpan: ${err.message || 'Terjadi kesalahan'}\n\nTips:\n1. Pastikan tabel 'restaurants' & 'menu_items' sudah dibuat.\n2. Cek apakah RLS di Supabase mengizinkan INSERT.\n3. Cek koneksi internet.`);
     } finally {
       setLoading(false);
     }
@@ -277,22 +298,25 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
       </div>
 
       <form onSubmit={handleSubmit} className="p-4 flex flex-col gap-6">
-        {/* Restaurant Image Picker */}
+        {/* Image Picker for both Resto & Post */}
         <div className={`w-full h-48 rounded-3xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors relative overflow-hidden ${
           isDarkMode 
             ? 'bg-[#262626] border-[#404040] text-[#A8A29E] hover:bg-[#333333]' 
             : 'bg-[#F6F1EA] border-[#A8A29E] text-[#78716C] hover:bg-[#E7E5E4]'
         }`}>
           {restoImage ? (
-            <img src={restoImage} alt="Restaurant Preview" className="w-full h-full object-cover" />
+            <img src={restoImage} alt="Preview" className="w-full h-full object-cover" />
           ) : (
             <>
               <Camera className="w-8 h-8 mb-2" />
-              <span className="text-sm font-bold">Tekan untuk ambil foto restauran</span>
+              <span className="text-sm font-bold">
+                {isResto ? 'Ambil Foto Restauran' : 'Ambil Foto Postingan'}
+              </span>
             </>
           )}
           <input 
             type="file" 
+            name="main_image"
             accept="image/*"
             className="absolute inset-0 opacity-0 cursor-pointer"
             onChange={async (e) => {
@@ -485,13 +509,13 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
             <>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Tulis Postingan Tempat Makan</label>
-                <textarea required placeholder="Wah gila bener ini ayamnya..." className={`w-full h-32 rounded-xl p-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] resize-none transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
+                <textarea name="content" required placeholder="Wah gila bener ini ayamnya..." className={`w-full h-32 rounded-xl p-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] resize-none transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
               </div>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Tandai Lokasi (Opsional)</label>
                 <div className="relative">
                   <Store className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-[#A8A29E]" />
-                  <input type="text" placeholder="Cari nama resto..." className={`w-full h-12 rounded-xl pl-10 pr-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
+                  <input name="tagged_resto" type="text" placeholder="Cari nama resto..." className={`w-full h-12 rounded-xl pl-10 pr-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
                 </div>
               </div>
             </>

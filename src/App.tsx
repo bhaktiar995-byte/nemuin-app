@@ -74,31 +74,40 @@ export default function App() {
         setIsSupabaseConnected(true);
         const mapped = restoData.map((r: any) => ({
           ...r,
+          id: String(r.id),
           reviewCount: r.review_count || 0,
           isAvailableOnline: r.is_available_online || false,
           priceRange: r.price_range || '',
           phone: r.phone || '',
           hours: r.hours || '',
-          foodCategories: r.type ? [r.type] : [],
-          coords: [Number(r.lat), Number(r.lng)],
-          menu: r.menu_items || [],
-          reviews: r.reviews || [],
+          foodCategories: r.type ? [r.type] : ['Umum'],
+          coords: [Number(r.lat || -7.92), Number(r.lng || 112.60)],
+          menu: (r.menu_items || []).map((m: any) => ({ 
+            ...m, 
+            id: String(m.id),
+            price: Number(m.price || 0),
+            category: m.category || 'Umum'
+          })),
+          reviews: (r.reviews || []).map((rev: any) => ({ ...rev, id: String(rev.id) })),
         }));
         setRestaurants(mapped);
       } else {
+        // Fallback to example data if Supabase is connected but empty
         setIsSupabaseConnected(true);
-        setRestaurants([]);
+        setRestaurants(RESTAURANTS);
       }
 
       // 2. Fetch Posts
       const { data: postData, error: postError } = await supabase
         .from('posts')
+        .select('*')
         .order('date', { ascending: false });
       
       if (postError) throw postError;
       
       if (postData && postData.length > 0) {
         const mappedPosts = postData.map(p => ({
+          ...p,
           id: String(p.id),
           user: p.author || 'Anonymous',
           userAvatar: `https://ui-avatars.com/api/?name=${p.author || 'A'}&background=random`,
@@ -113,8 +122,9 @@ export default function App() {
         setPosts(FOOD_POSTS);
       }
     } catch (err) {
-      console.error("Supabase Fetch failed:", err);
+      console.error("Supabase Fetch failed details:", err);
       setIsSupabaseConnected(false);
+      // Fallback to example data on error
       setRestaurants(RESTAURANTS);
       setPosts(FOOD_POSTS);
     } finally {
@@ -399,7 +409,15 @@ export default function App() {
               />
             )}
             {view === 'create_post' && (
-              <AddFormsScreen type="post" onBack={() => setView('create_menu')} onSuccess={() => setView('feed')} isDarkMode={isDarkMode} />
+              <AddFormsScreen 
+                type="post" 
+                onBack={() => setView('create_menu')} 
+                onSuccess={() => {
+                  setView('feed');
+                  fetchRestaurants();
+                }} 
+                isDarkMode={isDarkMode} 
+              />
             )}
             {view === 'profile' && (
               <ProfileScreen 
