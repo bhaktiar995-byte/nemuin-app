@@ -1,6 +1,6 @@
 {
-  "name": "Remix: Nemuin",
-  "description": "Nemuin - Aplikasi penjelajah makanan tersembunyi (hidden gems) di sekitarmu dengan peta interaktif dan feed komunitas.",
+  "name": "Nemuin",
+  "description": "Aplikasi penjelajah makanan tersembunyi (hidden gems) di sekitarmu dengan peta interaktif dan feed komunitas.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
