@@ -9,18 +9,20 @@ interface SettingsScreenProps {
 
 export function SettingsScreen({ isDarkMode, onToggleDarkMode, onBack, onNavigateProfile }: SettingsScreenProps) {
   return (
-    <div className={`flex-1 w-full flex flex-col h-full transition-colors duration-300 ${isDarkMode ? 'bg-[#1C1917] text-[#FAF9F6]' : 'bg-white text-[#4B2E2A]'}`}>
-      <div className="flex-1 p-6 space-y-6 pt-10 relative">
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={onBack}
-            className={`p-3 rounded-2xl border transition-all ${isDarkMode ? 'bg-[#262626] border-[#404040] text-white hover:bg-[#333333]' : 'bg-[#F6F1EA] border-[#E7E5E4] text-[#4B2E2A] hover:bg-white'}`}
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <div className="space-y-1">
-            <h2 className="text-2xl font-black italic tracking-tighter">Pengaturan</h2>
-            <p className={`text-[10px] font-bold uppercase tracking-[0.2em] ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Kustomisasi Pengalaman Anda</p>
+    <div className={`flex-1 w-full flex flex-col h-full overflow-y-auto transition-colors duration-300 ${isDarkMode ? 'bg-[#1C1917] text-[#FAF9F6]' : 'bg-white text-[#4B2E2A]'}`}>
+      <div className="flex-1 p-6 space-y-6 pt-10 relative pb-32">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={onBack}
+              className={`p-3 rounded-2xl border transition-all ${isDarkMode ? 'bg-[#262626] border-[#404040] text-white hover:bg-[#333333]' : 'bg-[#F6F1EA] border-[#E7E5E4] text-[#4B2E2A] hover:bg-white'}`}
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <div className="space-y-1">
+              <h2 className="text-2xl font-black italic tracking-tighter">Pengaturan</h2>
+              <p className={`text-[10px] font-bold uppercase tracking-[0.2em] ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Kustomisasi Pengalaman Anda</p>
+            </div>
           </div>
         </div>
 

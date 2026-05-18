@@ -1,3 +1,20 @@
+export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): string {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c;
+  
+  if (d < 1) {
+    return `${Math.round(d * 1000)} m`;
+  }
+  return `${d.toFixed(1)} km`;
+}
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -5,6 +22,8 @@ export interface MenuItem {
   price: number;
   image: string;
   category: 'Main Course' | 'Drinks' | 'Snacks' | 'Dessert';
+  rating?: number;
+  reviewCount?: number;
 }
 
 export interface Review {
@@ -87,11 +106,11 @@ export const RESTAURANTS: Restaurant[] = [
     coords: [-7.921500, 112.598000],
     isAvailableOnline: true,
     menu: [
-      { id: "m1", name: "Paket Ayam Bawang", description: "Ayam goreng renyah dengan sambal bawang khas pedas nampol lengkap", price: 22000, image: "https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?auto=format&fit=crop&q=80&w=400", category: "Main Course" },
-      { id: "m2", name: "Jamur Crispy", description: "Jamur enoki digoreng garing dengan bumbu rahasia", price: 12000, image: "https://images.unsplash.com/photo-1621609176373-10af6f5cecae?auto=format&fit=crop&q=80&w=400", category: "Snacks" },
-      { id: "m10", name: "Cah Kangkung Terasi", description: "Tumis kangkung segar dengan terasi udang pilihan", price: 10000, image: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400", category: "Main Course" },
-      { id: "m11", name: "Kol Goreng Crispy", description: "Kol goreng gurih pendamping ayam bawang", price: 8000, image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&q=80&w=400", category: "Snacks" },
-      { id: "m3", name: "Es Teh Manis", description: "Es teh manis segar", price: 5000, image: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&q=80&w=400", category: "Drinks" }
+      { id: "m1", name: "Paket Ayam Bawang", description: "Ayam goreng renyah dengan sambal bawang khas pedas nampol lengkap", price: 22000, image: "https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?auto=format&fit=crop&q=80&w=400", category: "Main Course", rating: 4.9, reviewCount: 156 },
+      { id: "m2", name: "Jamur Crispy", description: "Jamur enoki digoreng garing dengan bumbu rahasia", price: 12000, image: "https://images.unsplash.com/photo-1621609176373-10af6f5cecae?auto=format&fit=crop&q=80&w=400", category: "Snacks", rating: 4.5, reviewCount: 42 },
+      { id: "m10", name: "Cah Kangkung Terasi", description: "Tumis kangkung segar dengan terasi udang pilihan", price: 10000, image: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400", category: "Main Course", rating: 4.7, reviewCount: 88 },
+      { id: "m11", name: "Kol Goreng Crispy", description: "Kol goreng gurih pendamping ayam bawang", price: 8000, image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&q=80&w=400", category: "Snacks", rating: 4.8, reviewCount: 120 },
+      { id: "m3", name: "Es Teh Manis", description: "Es teh manis segar", price: 5000, image: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&q=80&w=400", category: "Drinks", rating: 4.4, reviewCount: 210 }
     ],
     reviews: [
       { id: "rev1", user: "Budi UMM", rating: 5, comment: "Mantap sambalnya bikin nagih!" },
@@ -114,10 +133,10 @@ export const RESTAURANTS: Restaurant[] = [
     coords: [-7.918000, 112.601000],
     isAvailableOnline: false,
     menu: [
-      { id: "m4", name: "Bakso Campur", description: "Bakso urat sapi asli dengan tahu dan gorengan", price: 18000, image: "https://images.unsplash.com/photo-1634261899147-ece64a8523c0?auto=format&fit=crop&q=80&w=400", category: "Main Course" },
-      { id: "m12", name: "Bakso Bakar", description: "Bakso bakar ukuran jumbo dengan bumbu kacang pedas manis", price: 15000, image: "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?auto=format&fit=crop&q=80&w=400", category: "Main Course" },
-      { id: "m13", name: "Tahu Walik Goreng", description: "Tahu walik isi adonan ayam udang renyah", price: 12000, image: "https://images.unsplash.com/photo-1541529086526-db283c563270?auto=format&fit=crop&q=80&w=400", category: "Snacks" },
-      { id: "m5", name: "Es Jeruk", description: "Es jeruk segar dari jeruk peras asli", price: 8000, image: "https://images.unsplash.com/photo-1600271886742-f049cd451bba?auto=format&fit=crop&q=80&w=400", category: "Drinks" }
+      { id: "m4", name: "Bakso Campur", description: "Bakso urat sapi asli dengan tahu dan gorengan", price: 18000, image: "https://images.unsplash.com/photo-1634261899147-ece64a8523c0?auto=format&fit=crop&q=80&w=400", category: "Main Course", rating: 4.8, reviewCount: 245 },
+      { id: "m12", name: "Bakso Bakar", description: "Bakso bakar ukuran jumbo dengan bumbu kacang pedas manis", price: 15000, image: "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?auto=format&fit=crop&q=80&w=400", category: "Main Course", rating: 4.7, reviewCount: 112 },
+      { id: "m13", name: "Tahu Walik Goreng", description: "Tahu walik isi adonan ayam udang renyah", price: 12000, image: "https://images.unsplash.com/photo-1541529086526-db283c563270?auto=format&fit=crop&q=80&w=400", category: "Snacks", rating: 4.6, reviewCount: 95 },
+      { id: "m5", name: "Es Jeruk", description: "Es jeruk segar dari jeruk peras asli", price: 8000, image: "https://images.unsplash.com/photo-1600271886742-f049cd451bba?auto=format&fit=crop&q=80&w=400", category: "Drinks", rating: 4.5, reviewCount: 150 }
     ],
     reviews: [
       { id: "rev3", user: "Andi", rating: 5, comment: "Kuah baksonya seger banget." }

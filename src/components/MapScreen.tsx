@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Search, SlidersHorizontal, Navigation } from 'lucide-react';
-import { Restaurant } from '../data/mock';
+import { Restaurant, calculateDistance } from '../data/mock';
 
 // Fix generic icon issue with react-leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -46,6 +46,11 @@ const userLocationIcon = L.divIcon({
 interface MapScreenProps {
   restaurants: Restaurant[];
   onSelect: (r: Restaurant) => void;
+  searchQuery?: string;
+  onSearchChange?: (val: string) => void;
+  onOpenFilters?: () => void;
+  userLocation?: [number, number] | null;
+  isDarkMode?: boolean;
 }
 
 function MapResizer() {
@@ -59,46 +64,12 @@ function MapResizer() {
   return null;
 }
 
-export function MapScreen({ restaurants, onSelect }: MapScreenProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+export function MapScreen({ restaurants, onSelect, searchQuery = '', onSearchChange, onOpenFilters, userLocation: realUserLocation, isDarkMode = false }: MapScreenProps) {
   const [filterOnline, setFilterOnline] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [userPos, setUserPos] = useState<[number, number] | null>(null);
-  const [locError, setLocError] = useState<string | null>(null);
-
-  const defaultCenter: [number, number] = [-7.9666, 112.6326]; // Malang Center
-
-  useEffect(() => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserPos([position.coords.latitude, position.coords.longitude]);
-          setLocError(null);
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-          if (error.code === 1) {
-            setLocError("Izin lokasi ditolak");
-          } else {
-            setLocError("Gagal mendapatkan lokasi");
-          }
-        },
-        { enableHighAccuracy: true }
-      );
-    } else {
-      setLocError("Geolocation tidak didukung");
-    }
-  }, []);
-
-  function MapController({ coords }: { coords: [number, number] | null }) {
-    const map = useMap();
-    useEffect(() => {
-      if (coords) {
-        map.flyTo(coords, 15, { animate: true });
-      }
-    }, [coords, map]);
-    return null;
-  }
+  
+  // Real location or fallback to UMM Kampus 3 center
+  const userLocation: [number, number] = realUserLocation || [-7.922500, 112.599000];
 
   // Basic filtering for demo
   const filtered = restaurants.filter(r => {
@@ -109,91 +80,64 @@ export function MapScreen({ restaurants, onSelect }: MapScreenProps) {
     return matchSearch && matchOnline && matchCategory;
   });
 
-  const handleRecenter = () => {
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const newPos: [number, number] = [position.coords.latitude, position.coords.longitude];
-          setUserPos(newPos);
-          setLocError(null);
-        },
-        (error) => {
-          if (error.code === 1) setLocError("Izin lokasi ditolak");
-          else setLocError("Gagal mendapatkan lokasi");
-        }
-      );
-    }
-  };
-
   return (
-    <div className="absolute inset-0 z-0 text-[#4B2E2A]">
-      {/* Search Header */}
-      <div className="absolute top-0 left-0 right-0 z-[1000] p-4 pt-10 pointer-events-none">
-        <div className="flex gap-2 w-full pointer-events-auto">
-          <div className="flex-1 bg-white/90 backdrop-blur shadow-sm rounded-2xl p-3 flex items-center h-12 border border-[#E7E5E4]">
-            <Search className="w-5 h-5 text-[#A8A29E]" />
-            <input 
-              type="text"
-              placeholder="Search in Malang..."
-              className="flex-1 h-full bg-transparent border-none focus:outline-none px-3 text-sm"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+    <div className="absolute inset-0 z-0">
+      {/* Category Chips Overlay - Positioned below global header */}
+      <div className="absolute top-0 left-0 right-0 z-[100] p-4 flex flex-col items-center gap-3 pointer-events-none">
+        <div className="w-full max-w-4xl flex flex-col gap-3 pointer-events-auto">
+          {/* Centered Category Chips */}
+          <div className="w-full relative">
+            <div className="flex gap-2 overflow-x-auto pb-4 pt-1 px-1 scrollbar-none justify-start md:justify-center w-full">
+              <button 
+                onClick={() => setFilterOnline(!filterOnline)}
+                className={`px-5 py-2 shadow-md rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap border transition-all active:scale-95 ${
+                  filterOnline 
+                    ? 'bg-[#FF611D] text-white border-[#FF611D] shadow-[0_5px_15px_rgba(255,97,29,0.3)]' 
+                    : isDarkMode 
+                      ? 'bg-[#262626] border-[#404040] text-[#A8A29E]' 
+                      : 'bg-white text-[#4B2E2A] border-[#E7E5E4]'
+                }`}
+              >
+                Pesan Online
+              </button>
+              {['Lalapan', 'Ayam', 'Bakso', 'Nasi Goreng', 'Mie', 'Sate', 'Minuman'].map(category => (
+                <button 
+                  key={category} 
+                  onClick={() => setActiveCategory(activeCategory === category ? null : category)}
+                  className={`px-5 py-2 shadow-md rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap border transition-all active:scale-95 ${
+                    activeCategory === category 
+                      ? 'bg-[#4B2E2A] text-white border-[#4B2E2A]' 
+                      : isDarkMode 
+                        ? 'bg-[#262626] border-[#404040] text-[#A8A29E]' 
+                        : 'bg-white text-[#4B2E2A] border-[#E7E5E4]'
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
           </div>
-          <button className="w-12 h-12 bg-white/90 backdrop-blur shadow-sm rounded-2xl flex items-center justify-center shrink-0 text-[#78716C] border border-[#E7E5E4]">
-            <SlidersHorizontal className="w-5 h-5" />
-          </button>
         </div>
-        
-        {/* Chips */}
-        <div className="flex gap-2 mt-3 overflow-x-auto pb-2 scrollbar-none pointer-events-auto">
-          <button 
-            onClick={() => setFilterOnline(!filterOnline)}
-            className={`px-4 py-1.5 shadow-sm rounded-full text-xs font-bold whitespace-nowrap border transition-colors ${filterOnline ? 'bg-[#FF611D] text-white border-[#FF611D]' : 'bg-[#F6F1EA] text-[#4B2E2A] border-[#E7E5E4]'}`}
-          >
-            Pesan Online
-          </button>
-          {['Lalapan', 'Ayam', 'Bakso', 'Nasi Goreng', 'Mie'].map(category => (
-            <button 
-              key={category} 
-              onClick={() => setActiveCategory(activeCategory === category ? null : category)}
-              className={`px-4 py-1.5 shadow-sm rounded-full text-xs font-bold whitespace-nowrap border transition-colors ${activeCategory === category ? 'bg-[#4B2E2A] text-white border-[#4B2E2A]' : 'bg-[#F6F1EA] text-[#4B2E2A] border-[#E7E5E4]'}`}
-            >
-              {category}
-            </button>
-          ))}
-        </div>
-
-        {/* Location Status Message */}
-        {locError && (
-          <div className="mt-4 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-full w-fit shadow-md animate-bounce">
-            {locError}
-          </div>
-        )}
       </div>
 
       <MapContainer 
-        center={defaultCenter} 
-        zoom={13} 
+        // Centered roughly on Malang - UMM Kampus 3 Area
+        center={[-7.921323, 112.599587]} 
+        zoom={15} 
         scrollWheelZoom={true} 
         zoomControl={false}
         className="w-full h-full relative z-0"
       >
         <MapResizer />
-        <MapController coords={userPos} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
         />
-
-        {userPos && (
-          <Marker position={userPos} icon={userLocationIcon}>
-            <Popup className="font-bold text-sm text-[#4B2E2A] pb-1">
-              Lokasi Saya
-            </Popup>
-          </Marker>
-        )}
-
+        <Marker position={userLocation} icon={userLocationIcon}>
+          <Popup className="font-bold text-sm text-[#4B2E2A] pb-1">
+            Lokasi Anda Saat Ini
+          </Popup>
+        </Marker>
         {filtered.map(r => (
           <Marker key={r.id} position={r.coords} icon={createFoodMarkerIcon(r)}>
             <Popup className="food-popup">
@@ -202,7 +146,10 @@ export function MapScreen({ restaurants, onSelect }: MapScreenProps) {
                 <h3 className="font-bold text-[#4B2E2A] leading-tight mb-1">{r.name}</h3>
                 <div className="flex items-center text-xs text-[#78716C] mb-2">
                   <span className="text-[#FF611D] font-bold mr-1">★ {r.rating}</span>
-                  <span>({r.reviewCount}) • {r.distance}</span>
+                  <span>({r.reviewCount}) • {realUserLocation 
+                        ? calculateDistance(realUserLocation[0], realUserLocation[1], r.coords[0], r.coords[1])
+                        : r.distance
+                      }</span>
                 </div>
                 <button 
                   onClick={(e) => {
@@ -220,10 +167,7 @@ export function MapScreen({ restaurants, onSelect }: MapScreenProps) {
       </MapContainer>
 
       {/* Recenter Button */}
-      <button 
-        onClick={handleRecenter}
-        className="absolute bottom-20 right-4 z-[1000] w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center text-[#4B2E2A] border border-[#E7E5E4] hover:bg-[#F6F1EA] transition-colors"
-      >
+      <button className="absolute bottom-20 right-4 z-[1000] w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center text-[#4B2E2A] border border-[#E7E5E4]">
         <Navigation className="w-5 h-5 fill-current" />
       </button>
     </div>

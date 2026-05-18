@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, useAnimation, AnimatePresence } from 'motion/react';
-import { ChevronLeft, RefreshCw, Star, MapPin, Trophy, Settings, Search, Check, Info, UtensilsCrossed } from 'lucide-react';
+import { ChevronLeft, RefreshCw, Star, MapPin, Trophy, Settings, Search, Check, Info, UtensilsCrossed, X } from 'lucide-react';
 import { Restaurant } from '../data/mock';
 
 interface SpinWheelScreenProps {
@@ -16,6 +16,7 @@ export function SpinWheelScreen({ restaurants, onSelect, onBack, isDarkMode }: S
   const [winner, setWinner] = useState<Restaurant | null>(null);
   const [wheelRestaurants, setWheelRestaurants] = useState<Restaurant[]>([]);
   const [showConfig, setShowConfig] = useState(false);
+  const [showResult, setShowResult] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const controls = useAnimation();
@@ -52,12 +53,14 @@ export function SpinWheelScreen({ restaurants, onSelect, onBack, isDarkMode }: S
     }
     
     setWinner(null);
+    setShowResult(false);
   }, [wheelCount, restaurants, selectedIds]);
 
   const spinWheel = async () => {
     if (isSpinning) return;
     setIsSpinning(true);
     setWinner(null);
+    setShowResult(false);
 
     const actualCount = wheelRestaurants.length;
     const extraSpins = 5 + Math.random() * 5;
@@ -76,6 +79,7 @@ export function SpinWheelScreen({ restaurants, onSelect, onBack, isDarkMode }: S
     const sectionSize = 360 / actualCount;
     const winningIndex = Math.floor((360 - (normalizedRotation % 360)) / sectionSize) % actualCount;
     setWinner(wheelRestaurants[winningIndex]);
+    setShowResult(true);
   };
 
   const toggleSelect = (id: string) => {
@@ -308,51 +312,93 @@ export function SpinWheelScreen({ restaurants, onSelect, onBack, isDarkMode }: S
                 </button>
               </div>
 
-              {/* Winner Announcement - Polished Card */}
-              {winner && !isSpinning && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9, y: 30 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  className="bg-[#4B2E2A] p-1 rounded-[2.5rem] shadow-[0_30px_60px_rgba(0,0,0,0.2)] w-full max-w-sm mb-12"
-                >
-                  <div className={`p-6 rounded-[2.3rem] border transition-colors ${isDarkMode ? 'bg-[#1C1917] border-[#404040]' : 'bg-white border-white/10'}`}>
-                    <div className="flex items-center justify-between mb-5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-[#FF611D]/10 rounded-full flex items-center justify-center">
-                          <Trophy className="w-4 h-4 text-[#FF611D]" />
+              {/* Result Modal */}
+              <AnimatePresence>
+                {showResult && winner && (
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 lg:p-12">
+                    <motion.div 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => setShowResult(false)}
+                      className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8, y: 50, rotate: -5 }}
+                      animate={{ opacity: 1, scale: 1, y: 0, rotate: 0 }}
+                      exit={{ opacity: 0, scale: 0.8, y: 50, rotate: 5 }}
+                      className="relative w-full max-w-sm bg-[#4B2E2A] p-1 rounded-[2.5rem] shadow-[0_30px_100px_rgba(255,97,29,0.3)] border-2 border-[#FF611D]"
+                    >
+                      {/* Close button for Result Modal */}
+                      <button 
+                        onClick={() => setShowResult(false)}
+                        className="absolute -top-4 -right-4 w-10 h-10 bg-[#FF611D] text-white rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-all z-20 border-2 border-white dark:border-[#1C1917]"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+
+                      <div className={`p-6 rounded-[2.3rem] border transition-colors ${isDarkMode ? 'bg-[#1C1917] border-[#404040]' : 'bg-white border-white/10'}`}>
+                        <div className="flex items-center justify-between mb-5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-[#FF611D]/10 rounded-full flex items-center justify-center">
+                              <Trophy className="w-4 h-4 text-[#FF611D]" />
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#FF611D]">Pilihan Takdir</span>
+                          </div>
+                          <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
+                            <Star className="w-3 h-3 fill-[#FFB80E] text-[#FFB80E]" />
+                            <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{winner.rating}</span>
+                          </div>
                         </div>
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#FF611D]">Pilihan Takdir</span>
-                      </div>
-                      <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
-                        <Star className="w-3 h-3 fill-[#FFB80E] text-[#FFB80E]" />
-                        <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{winner.rating}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-5 items-center">
-                      <div className="relative shrink-0">
-                        <img src={winner.image} alt={winner.name} className="w-24 h-24 rounded-[1.5rem] object-cover shadow-lg" referrerPolicy="no-referrer" />
-                        <div className={`absolute -bottom-2 -right-2 p-1 rounded-xl shadow-md border ${isDarkMode ? 'bg-[#333333] border-[#525252]' : 'bg-white border-[#E7E5E4]'}`}>
-                          <div className={`text-white text-[8px] font-black px-2 py-1 rounded-lg ${isDarkMode ? 'bg-[#FF611D]' : 'bg-[#4B2E2A]'}`}>PRO</div>
+                        
+                        <div className="flex flex-col items-center text-center">
+                          <div className="relative mb-6">
+                            <motion.img 
+                              initial={{ scale: 0.8 }}
+                              animate={{ scale: 1 }}
+                              transition={{ type: "spring", stiffness: 200, damping: 10 }}
+                              src={winner.image} 
+                              alt={winner.name} 
+                              className="w-40 h-40 rounded-[2.5rem] object-cover shadow-2xl border-4 border-[#FF611D]/20" 
+                              referrerPolicy="no-referrer" 
+                            />
+                            <div className="absolute -top-4 -right-4 bg-[#FF611D] text-white p-4 rounded-full shadow-lg transform rotate-12">
+                              <Trophy className="w-6 h-6" />
+                            </div>
+                          </div>
+                          
+                          <h3 className={`text-2xl font-black leading-tight mb-2 transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{winner.name}</h3>
+                          
+                          <div className="flex items-center text-[#78716C] mb-8">
+                            <MapPin className="w-4 h-4 mr-2 text-[#FF611D]" />
+                            <span className={`text-sm font-bold transition-colors ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#78716C]'}`}>{winner.distance} dari lokasimu</span>
+                          </div>
+
+                          <div className="flex flex-col w-full gap-3">
+                            <button
+                              onClick={() => {
+                                setShowResult(false);
+                                onSelect(winner);
+                              }}
+                              className="w-full py-5 bg-[#FF611D] text-white rounded-2xl text-[12px] font-black uppercase tracking-widest hover:bg-[#4B2E2A] transition-all shadow-[0_10px_30px_rgba(255,97,29,0.3)] active:scale-95"
+                            >
+                              Lihat Detail Resto
+                            </button>
+                            <button
+                              onClick={() => setShowResult(false)}
+                              className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border ${
+                                isDarkMode ? 'bg-[#262626] border-[#404040] text-white hover:bg-[#333333]' : 'bg-white border-[#E7E5E4] text-[#4B2E2A] hover:bg-gray-50'
+                              }`}
+                            >
+                              Spin Lagi
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className={`text-xl font-black leading-tight mb-2 truncate transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{winner.name}</h3>
-                        <div className="flex items-center text-[#78716C] mb-4">
-                          <MapPin className="w-3.5 h-3.5 mr-1.5 text-[#A8A29E]" />
-                          <span className={`text-xs font-bold transition-colors ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#78716C]'}`}>{winner.distance} dari lokasimu</span>
-                        </div>
-                        <button
-                          onClick={() => onSelect(winner)}
-                          className="w-full py-3 bg-[#FF611D] text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#4B2E2A] transition-all shadow-lg active:scale-95"
-                        >
-                          Buka Detail Resto
-                        </button>
-                      </div>
-                    </div>
+                    </motion.div>
                   </div>
-                </motion.div>
-              )}
+                )}
+              </AnimatePresence>
             </motion.div>
           ) : (
             <motion.div 

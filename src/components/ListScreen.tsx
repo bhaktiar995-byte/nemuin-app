@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Search, SlidersHorizontal, MapPin, Star, UtensilsCrossed, RefreshCw } from 'lucide-react';
-import { Restaurant } from '../data/mock';
+import { Restaurant, calculateDistance } from '../data/mock';
 
 interface ListScreenProps {
   restaurants: Restaurant[];
@@ -9,6 +9,7 @@ interface ListScreenProps {
   isDarkMode?: boolean;
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
+  userLocation?: [number, number] | null;
   filters?: {
     priceRange: string[];
     minRating: number;
@@ -22,6 +23,7 @@ export function ListScreen({
   isDarkMode, 
   searchQuery = '', 
   onSearchChange,
+  userLocation,
   filters = { priceRange: [], minRating: 0 }
 }: ListScreenProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -41,9 +43,9 @@ export function ListScreen({
   return (
     <div className="flex-1 w-full flex flex-col h-full relative">
       
-      {/* Categories Bar - Sticky inside the scrollable container if possible, or just stay as top element if container is flex-col */}
-      <div className={`shrink-0 px-6 py-4 border-b transition-colors duration-300 sticky top-0 z-20 backdrop-blur-md ${isDarkMode ? 'bg-[#262626]/80 border-[#404040]' : 'bg-[#F6F1EA]/80 border-[#E7E5E4]'}`}>
-        <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none pointer-events-auto max-w-7xl mx-auto">
+      {/* Categories Bar - Centered below global header */}
+      <div className={`shrink-0 px-6 py-6 border-b transition-colors duration-300 sticky top-0 z-20 backdrop-blur-md flex justify-center ${isDarkMode ? 'bg-[#262626]/80 border-[#404040]' : 'bg-[#F6F1EA]/80 border-[#E7E5E4]'}`}>
+        <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none justify-start md:justify-center w-full max-w-7xl">
           {['Lalapan', 'Ayam', 'Bakso', 'Nasi Goreng', 'Mie', 'Sate', 'Minuman'].map(category => (
             <button 
               key={category} 
@@ -100,7 +102,10 @@ export function ListScreen({
                 <div className={`pt-4 border-t border-dashed flex items-center justify-between transition-colors ${isDarkMode ? 'border-[#404040]' : 'border-[#E7E5E4]'}`}>
                   <span className={`flex items-center text-xs font-bold transition-colors ${isDarkMode ? 'text-[#78716C]' : 'text-[#A8A29E]'}`}>
                     <MapPin className="w-3 h-3 mr-1 text-[#FF611D]" />
-                    {r.distance}
+                    {userLocation 
+                      ? calculateDistance(userLocation[0], userLocation[1], r.coords[0], r.coords[1])
+                      : r.distance
+                    }
                   </span>
                   <span className="text-sm font-black italic tracking-tighter text-[#FF611D]">
                     {r.priceRange}
