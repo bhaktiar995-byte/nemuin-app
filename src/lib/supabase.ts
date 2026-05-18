@@ -1,17 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+const supabaseUrl =
+  import.meta.env.VITE_SUPABASE_URL ||
+  'https://syxlqiuylwhyzzkkwwlv.supabase.co';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase credentials are missing. Check your environment variables.');
-}
+const supabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  'sb_publishable_ZkPLix3_LVd2DMRhQi5jLA_Xb68hoik';
 
-/**
- * Supabase client for client-side and server-side usage.
- * Note: For production, ensure Row Level Security (RLS) is enabled in Supabase.
- */
-export const supabase = createClient(
-  supabaseUrl || '',
-  supabaseAnonKey || ''
-);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
