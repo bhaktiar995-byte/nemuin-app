@@ -1,7 +1,7 @@
-import { Store, Camera, ChevronLeft, Bike } from 'lucide-react';
+import { Store, Camera, ChevronLeft } from 'lucide-react';
 
 interface CreateMenuScreenProps {
-  onSelect: (action: 'add_resto' | 'add_post' | 'add_service') => void;
+  onSelect: (action: 'add_resto' | 'add_post') => void;
   onBack: () => void;
   isDarkMode?: boolean;
 }
@@ -55,23 +55,6 @@ export function CreateMenuScreen({ onSelect, onBack, isDarkMode }: CreateMenuScr
           <div>
             <h2 className={`text-lg font-bold mb-1 transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>Tambah Tempat Makan</h2>
             <p className={`text-sm leading-snug transition-colors ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Daftarkan tempat makan baru agar orang lain dapat menemukannya di peta.</p>
-          </div>
-        </button>
-
-        <button 
-          onClick={() => onSelect('add_service')}
-          className={`p-6 rounded-3xl border shadow-sm hover:shadow-md transition-all text-left flex items-start gap-4 ${
-            isDarkMode 
-              ? 'bg-[#262626] border-[#404040] hover:border-[#FF611D]/50' 
-              : 'bg-white border-[#E7E5E4] hover:border-[#FF611D]/50'
-          }`}
-        >
-          <div className={`w-14 h-14 flex items-center justify-center rounded-2xl shrink-0 border transition-colors ${isDarkMode ? 'bg-[#404040] border-[#525252]' : 'bg-[#4B2E2A]/5 border-[#E7E5E4]'}`}>
-            <Bike className={`w-7 h-7 transition-colors ${isDarkMode ? 'text-[#FF611D]' : 'text-[#4B2E2A]'}`} />
-          </div>
-          <div>
-            <h2 className={`text-lg font-bold mb-1 transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>Pendaftaran Driver / Kurir</h2>
-            <p className={`text-sm leading-snug transition-colors ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Bergabung sebagai mitra driver nemuin dan mulai dapatkan penghasilan.</p>
           </div>
         </button>
       </div>

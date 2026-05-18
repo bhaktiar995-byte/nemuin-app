@@ -3,16 +3,18 @@ import { ChevronLeft, Camera, Send, Store, Plus, Trash2, ImagePlus, MapPin, Loca
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { supabase } from '../lib/supabase';
 
 interface MenuItem {
   id: string;
   name: string;
   price: string;
   image: string | null;
+  file?: File | null;
 }
 
 interface MockFormProps {
-  type: 'resto' | 'post' | 'service';
+  type: 'resto' | 'post';
   onBack: () => void;
   onSuccess: () => void;
   isDarkMode?: boolean;
@@ -115,7 +117,7 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
     }
   };
 
-  const updateMenuItem = (id: string, field: keyof MenuItem, value: string | null) => {
+  const updateMenuItem = (id: string, field: keyof MenuItem, value: any) => {
     setMenuItems(menuItems.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
 
@@ -128,83 +130,133 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
     });
   };
 
+  const uploadImage = async (file: File, bucket: string = 'images'): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+      const filePath = `uploads/${fileName}`;
+
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file);
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (err) {
+      console.error('Error uploading image:', err);
+      return null;
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    const form = e.target as HTMLFormElement;
+    if (type !== 'resto') {
+      // Logic for adding a post directly to Supabase
+      setLoading(true);
+      try {
+        const form = e.target as HTMLFormElement;
+        const content = (form.elements.namedItem('content') as HTMLTextAreaElement).value;
+        
+        let uploadedPublicUrl = null;
+        if (restoFile) {
+          uploadedPublicUrl = await uploadImage(restoFile);
+        }
 
-    let endpoint = '/api/restaurants';
-    let payload: any = {};
+        const { error } = await supabase
+          .from('posts')
+          .insert([{
+            content,
+            image: uploadedPublicUrl,
+            author: 'Anonymous',
+            date: new Date().toISOString()
+          }]);
 
-    if (type === 'resto') {
-      const name = (form.elements.namedItem('nama_tempat') as HTMLInputElement).value;
-      const address = (form.elements.namedItem('alamat') as HTMLInputElement).value;
-      const priceRange = (form.elements.namedItem('rentang_harga') as HTMLInputElement).value;
-      
-      payload = {
-        name,
-        type: selectedCategory === 'Lainnya' ? customCategory : selectedCategory,
-        address,
-        price_range: priceRange,
-        lat: selectedCoords[0],
-        lng: selectedCoords[1],
-        image: restoImage || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=400",
-        distance: "Local",
-        rating: 0,
-        review_count: 0,
-        menu_items: menuItems.filter(item => item.name.trim() !== '').map(item => ({
-          name: item.name,
-          price: parseInt(item.price.replace(/[^0-9]/g, '')) || 0,
-          image: item.image,
-          category: 'Umum'
-        }))
-      };
-    } else if (type === 'service') {
-      const name = (form.elements.namedItem('nama_lengkap') as HTMLInputElement).value;
-      const serviceType = (form.elements.namedItem('jenis_layanan') as HTMLSelectElement).value;
-      const phone = (form.elements.namedItem('no_hp') as HTMLInputElement).value;
-      
-      endpoint = '/api/services';
-      payload = {
-        name,
-        type: serviceType,
-        phone,
-        lat: selectedCoords[0],
-        lng: selectedCoords[1],
-        status: 'active',
-        image: restoImage || "https://images.unsplash.com/photo-1622329993327-64136aee0578?auto=format&fit=crop&q=80&w=200"
-      };
-    } else {
-      // POST
-      const content = (form.elements.namedItem('content') as HTMLTextAreaElement).value;
-      endpoint = '/api/posts'; // We should probably add this to server too or just resto
-      payload = {
-        content,
-        image: restoImage,
-        author: 'User',
-        date: new Date().toISOString()
-      };
-      // For now, let's just mock post if server doesn't have it, 
-      // but the user mostly wants "Pendaftaran" (Registration) which is resto/service.
+        if (error) throw error;
+        onSuccess();
+      } catch (err: any) {
+        console.error("Post save failed:", err);
+        alert(`Gagal posting: ${err.message || 'Terjadi kesalahan'}`);
+      } finally {
+        setLoading(false);
+      }
+      return;
     }
 
+    setLoading(true);
+    const form = e.target as HTMLFormElement;
+    const name = (form.elements.namedItem('nama_tempat') as HTMLInputElement).value;
+    const address = (form.elements.namedItem('alamat') as HTMLInputElement).value;
+    const priceRange = (form.elements.namedItem('rentang_harga') as HTMLInputElement).value;
+    const phone = (form.elements.namedItem('phone') as HTMLInputElement).value;
+    const hours = (form.elements.namedItem('hours') as HTMLInputElement).value;
+    
     try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      if (res.ok) {
-        onSuccess();
-      } else {
-        const errorData = await res.json();
-        console.error("Save failed:", errorData);
-        alert(`Gagal menyimpan: ${errorData.error || 'Terjadi kesalahan pada server'}`);
+      // 1. Upload Restaurant Image
+      let restoPublicUrl = restoImage || "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=400";
+      if (restoFile) {
+        const uploaded = await uploadImage(restoFile);
+        if (uploaded) restoPublicUrl = uploaded;
       }
-    } catch (err) {
-      console.error(err);
-      alert("Terjadi kesalahan jaringan atau server.");
+
+      // 2. Insert Restaurant
+      const { data: resto, error: restoError } = await supabase
+        .from('restaurants')
+        .insert([{
+          name,
+          type: selectedCategory === 'Lainnya' ? customCategory : selectedCategory,
+          address,
+          price_range: priceRange,
+          phone,
+          hours,
+          lat: selectedCoords[0],
+          lng: selectedCoords[1],
+          image: restoPublicUrl,
+          distance: "Local",
+          rating: 0,
+          review_count: 0
+        }])
+        .select()
+        .single();
+
+      if (restoError) throw restoError;
+
+      // 3. Insert Menu Items
+      const validMenuItems = menuItems.filter(item => item.name.trim() !== '');
+      if (validMenuItems.length > 0) {
+        const menuItemsToInsert = await Promise.all(validMenuItems.map(async (item) => {
+          let itemPublicUrl = item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200";
+          if (item.file) {
+            const uploaded = await uploadImage(item.file);
+            if (uploaded) itemPublicUrl = uploaded;
+          }
+          return {
+            restaurant_id: resto.id,
+            name: item.name,
+            price: parseInt(item.price.replace(/[^0-9]/g, '')) || 0,
+            image: itemPublicUrl,
+            category: 'Umum'
+          };
+        }));
+
+        const { error: menuError } = await supabase
+          .from('menu_items')
+          .insert(menuItemsToInsert);
+
+        if (menuError) {
+          console.error("Menu items insert failed:", menuError);
+          // We don't fail the whole request but alert the user
+        }
+      }
+
+      onSuccess();
+    } catch (err: any) {
+      console.error("Supabase Save failed:", err);
+      alert(`Gagal menyimpan: ${err.message || 'Terjadi kesalahan'}\n\nPastikan tabel dan bucket 'images' sudah disiapkan di Supabase.`);
     } finally {
       setLoading(false);
     }
@@ -219,7 +271,7 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className={`text-lg font-bold italic transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>
-          {type === 'resto' ? 'Pendaftaran Mitra' : type === 'service' ? 'Pendaftaran Driver' : 'Post Tempat Makan'}
+          {isResto ? 'Tambah Tempat Makan' : 'Post Tempat Makan'}
         </h1>
         <div className="w-10" />
       </div>
@@ -336,11 +388,11 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
               </div>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Nomor Telepon (WhatsApp diutamakan)</label>
-                <input type="tel" placeholder="Cth: 08123456789" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
+                <input name="phone" required type="tel" placeholder="Cth: 08123456789" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
               </div>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Jam Operasional</label>
-                <input required type="text" placeholder="Cth: 08:00 - 21:00" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
+                <input name="hours" required type="text" placeholder="Cth: 08:00 - 21:00" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
               </div>
 
               {/* Dynamic Menu Items */}
@@ -393,6 +445,7 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
                                 try {
                                   const base64 = await fileToBase64(file);
                                   updateMenuItem(item.id, 'image', base64);
+                                  updateMenuItem(item.id, 'file', file);
                                 } catch (err) {
                                   console.error("Error converting image:", err);
                                 }
@@ -428,56 +481,11 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
                 </div>
               </div>
             </>
-          ) : type === 'service' ? (
-            <>
-              <div className="flex flex-col gap-2">
-                <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Nama Lengkap</label>
-                <input name="nama_lengkap" required type="text" placeholder="Cth: Budi Sudarsono" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Jenis Layanan</label>
-                <select 
-                  name="jenis_layanan"
-                  className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`}
-                >
-                  <option>Ojek (Motor)</option>
-                  <option>Taxi (Mobil)</option>
-                  <option>Kurir (Kirim Barang)</option>
-                  <option>Food Delivery</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Nomor HP / WhatsApp</label>
-                <input name="no_hp" required type="tel" placeholder="Cth: 08123456789" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className={`text-xs font-bold uppercase tracking-widest pl-1 flex items-center gap-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
-                  <MapPin className="w-3 h-3" /> Area Operasional (Domisili)
-                </label>
-                <div className={`w-full h-56 rounded-2xl overflow-hidden border relative group ${isDarkMode ? 'border-[#404040]' : 'border-[#E7E5E4]'}`}>
-                  <MapContainer 
-                    center={selectedCoords} 
-                    zoom={14} 
-                    scrollWheelZoom={false}
-                    className="w-full h-full z-0"
-                  >
-                    <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-                      url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-                    />
-                    <Marker position={selectedCoords} icon={pickerIcon} />
-                    <MapClickHandler onClick={setSelectedCoords} />
-                    <LocateControl onLocationFound={setSelectedCoords} isDarkMode={isDarkMode} />
-                    <RecenterMap position={selectedCoords} />
-                  </MapContainer>
-                </div>
-              </div>
-            </>
           ) : (
             <>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Tulis Postingan Tempat Makan</label>
-                <textarea name="content" required placeholder="Wah gila bener ini ayamnya..." className={`w-full h-32 rounded-xl p-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] resize-none transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
+                <textarea required placeholder="Wah gila bener ini ayamnya..." className={`w-full h-32 rounded-xl p-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] resize-none transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
               </div>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Tandai Lokasi (Opsional)</label>
@@ -497,7 +505,7 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
         >
           {loading ? 'Menyimpan...' : (
             <>
-              {(type === 'resto' || type === 'service') ? 'Kirim Pendaftaran' : 'Posting Sekarang'}
+              {isResto ? 'Kirim Pendaftaran' : 'Posting Sekarang'}
               <Send className="w-4 h-4 ml-1" />
             </>
           )}

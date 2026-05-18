@@ -16,12 +16,14 @@ import { AddFormsScreen } from './components/AddFormsScreen';
 import { ProfileScreen } from './components/ProfileScreen';
 import { SpinWheelScreen } from './components/SpinWheelScreen';
 import { SettingsScreen } from './components/SettingsScreen';
+import { supabase } from './lib/supabase';
 import { RESTAURANTS, Restaurant, FOOD_POSTS } from './data/mock';
 
-type ViewMode = 'map' | 'list' | 'detail' | 'chat' | 'order' | 'feed' | 'create_menu' | 'create_resto' | 'create_post' | 'create_service' | 'profile' | 'spin' | 'settings';
+type ViewMode = 'map' | 'list' | 'detail' | 'chat' | 'order' | 'feed' | 'create_menu' | 'create_resto' | 'create_post' | 'profile' | 'spin' | 'settings';
 
 export default function App() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -56,34 +58,65 @@ export default function App() {
   const fetchRestaurants = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/restaurants');
-      const data = await res.json();
-      if (data.source === 'supabase') {
+      // 1. Fetch Restaurants
+      const { data: restoData, error: restoError } = await supabase
+        .from('restaurants')
+        .select(`
+          *,
+          menu_items (*),
+          reviews (*)
+        `)
+        .order('id', { ascending: false });
+
+      if (restoError) throw restoError;
+
+      if (restoData && restoData.length > 0) {
         setIsSupabaseConnected(true);
-        if (data.data && data.data.length > 0) {
-          const mapped = data.data.map((r: any) => ({
-            ...r,
-            reviewCount: r.review_count || 0,
-            isAvailableOnline: r.is_available_online || false,
-            priceRange: r.price_range || '',
-            coords: [Number(r.lat), Number(r.lng)],
-            menu: r.menu_items || [],
-            reviews: r.reviews || [],
-          }));
-          setRestaurants(mapped);
-        } else {
-          // If connected but empty, we can show sample data or remain empty
-          // Let's stay empty if using Supabase to avoid confusion, 
-          // or show sample if it's the very first time.
-          setRestaurants([]); 
-        }
+        const mapped = restoData.map((r: any) => ({
+          ...r,
+          reviewCount: r.review_count || 0,
+          isAvailableOnline: r.is_available_online || false,
+          priceRange: r.price_range || '',
+          phone: r.phone || '',
+          hours: r.hours || '',
+          foodCategories: r.type ? [r.type] : [],
+          coords: [Number(r.lat), Number(r.lng)],
+          menu: r.menu_items || [],
+          reviews: r.reviews || [],
+        }));
+        setRestaurants(mapped);
       } else {
-        setIsSupabaseConnected(false);
-        setRestaurants(RESTAURANTS);
+        setIsSupabaseConnected(true);
+        setRestaurants([]);
+      }
+
+      // 2. Fetch Posts
+      const { data: postData, error: postError } = await supabase
+        .from('posts')
+        .order('date', { ascending: false });
+      
+      if (postError) throw postError;
+      
+      if (postData && postData.length > 0) {
+        const mappedPosts = postData.map(p => ({
+          id: String(p.id),
+          user: p.author || 'Anonymous',
+          userAvatar: `https://ui-avatars.com/api/?name=${p.author || 'A'}&background=random`,
+          content: p.content,
+          image: p.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
+          timeAgo: new Date(p.date).toLocaleDateString('id-ID'),
+          likes: Math.floor(Math.random() * 10),
+          comments: 0
+        }));
+        setPosts(mappedPosts);
+      } else {
+        setPosts(FOOD_POSTS);
       }
     } catch (err) {
-      console.error("Fetch failed:", err);
+      console.error("Supabase Fetch failed:", err);
+      setIsSupabaseConnected(false);
       setRestaurants(RESTAURANTS);
+      setPosts(FOOD_POSTS);
     } finally {
       setLoading(false);
     }
@@ -99,16 +132,17 @@ export default function App() {
     setSelectedRestaurant(updated);
 
     try {
-      await fetch(`/api/restaurants/${updated.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const { error } = await supabase
+        .from('restaurants')
+        .update({
           rating: updated.rating,
           review_count: updated.reviewCount
         })
-      });
+        .eq('id', updated.id);
+      
+      if (error) throw error;
     } catch (err) {
-      console.error("Update failed:", err);
+      console.error("Supabase Update failed:", err);
     }
   };
 
@@ -344,15 +378,11 @@ export default function App() {
               />
             )}
             {view === 'feed' && (
-              <FeedScreen posts={FOOD_POSTS} isDarkMode={isDarkMode} />
+              <FeedScreen posts={posts} isDarkMode={isDarkMode} />
             )}
             {view === 'create_menu' && (
               <CreateMenuScreen 
-                onSelect={(action) => {
-                  if (action === 'add_resto') setView('create_resto');
-                  else if (action === 'add_service') setView('create_service');
-                  else setView('create_post');
-                }} 
+                onSelect={(action) => setView(action === 'add_resto' ? 'create_resto' : 'create_post')} 
                 onBack={() => setView(prevView)} 
                 isDarkMode={isDarkMode}
               />
@@ -364,17 +394,6 @@ export default function App() {
                 onSuccess={() => {
                   setView('list');
                   fetchRestaurants();
-                }} 
-                isDarkMode={isDarkMode} 
-              />
-            )}
-            {view === 'create_service' && (
-              <AddFormsScreen 
-                type="service" 
-                onBack={() => setView('create_menu')} 
-                onSuccess={() => {
-                  alert("Pendaftaran Driver Berhasil! Data Anda sudah tersimpan di database.");
-                  setView('list');
                 }} 
                 isDarkMode={isDarkMode} 
               />
